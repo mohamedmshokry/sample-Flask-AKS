@@ -12,7 +12,7 @@ variables:
   aksClusterName: 'myAKSCluster'                       # AKS cluster name
   aksLocation: 'East US'                               # Azure location
   dockerRegistry: 'docker.io'              # Azure Container Registry (ACR) name
-  dockerImageName: 'sampleflask'                       # Docker image name
+  dockerImageName: 'mohamedshokry/sampleflask'                       # Docker image name
   helmChartPath: './flask-app-chart'                    # Path to Helm chart in your repo
   githubRepo: 'mohamedmshokry/sample-Flask-AKS'    # GitHub repo
 
