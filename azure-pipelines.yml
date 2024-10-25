@@ -1,0 +1,96 @@
+trigger:
+  branches:
+    include:
+      - main  # Trigger on changes to the main branch
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureSubscription: $(azureSubscription)   # Azure service connection name
+  aksResourceGroup: 'myAKSResourceGroup'               # Azure resource group name
+  aksClusterName: 'myAKSCluster'                       # AKS cluster name
+  aksLocation: 'East US'                               # Azure location
+  dockerRegistry: 'docker.io'              # Azure Container Registry (ACR) name
+  dockerImageName: 'sampleflask'                       # Docker image name
+  helmChartPath: './flask-app-chart'                    # Path to Helm chart in your repo
+  githubRepo: 'mohamedmshokry/sample-Flask-AKS'    # GitHub repo
+
+stages:
+- stage: Build
+  jobs:
+  - job: BuildDockerImage
+    displayName: 'Build Docker Image'
+    steps:
+    - checkout: self
+      persistCredentials: true
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: '$(dockerRegistry)'               # Connect to ACR
+        repository: '$(dockerImageName)'                     # Docker image name
+        command: 'buildAndPush'
+        Dockerfile: 'Dockerfile'
+        tags: '$(Build.BuildId)'
+
+- stage: ProvisionAKS
+  jobs:
+  - job: CreateAKSClusterWithTerraform
+    displayName: 'Provision AKS Cluster using Terraform'
+    steps:
+    - checkout: self
+      persistCredentials: true
+
+    # Install Terraform manually
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          curl -o terraform.zip https://releases.hashicorp.com/terraform/1.5.6/terraform_1.5.6_linux_amd64.zip
+          unzip terraform.zip
+          sudo mv terraform /usr/local/bin/
+          terraform -v  # Check Terraform version
+
+    # Initialize Terraform
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          terraform init
+
+    # Apply Terraform to create AKS
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+
+- stage: Deploy
+  dependsOn: [Build, ProvisionAKS]
+  jobs:
+  - job: DeployToAKS
+    displayName: 'Deploy Helm Chart to AKS'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          # Get AKS credentials
+          az aks get-credentials --resource-group $(aksResourceGroup) --name $(aksClusterName) --overwrite-existing
+          
+          # Install Helm (if needed)
+          curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+
+          # Helm upgrade or install
+          helm upgrade --install flask-app $(helmChartPath) \
+            --set image.repository=$(dockerRegistry)/$(dockerImageName) \
+            --set image.tag=$(Build.BuildId)
