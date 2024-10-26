@@ -8,8 +8,8 @@ pool:
 
 variables:
   azureSubscription: 'Your-Azure-Service-Connection'    # Azure service connection name
-  acrName: 'aksflaskdemo'                                  # ACR name
-  acrResourceGroup: 'aks-demo'                # Resource group for ACR
+  acrName: 'aksflaskdemo'                               # ACR name
+  acrResourceGroup: 'aks-demo'                          # Resource group for ACR
   dockerImageName: 'sampleflask'                        # Docker image name
   dockerFilePath: 'Dockerfile'                          # Path to Dockerfile in the repo
   imageTag: $(Build.BuildId)                            # Tag the image with the build ID
@@ -22,6 +22,11 @@ stages:
     steps:
     - checkout: self
       persistCredentials: true
+
+    # Install Azure CLI
+    - script: |
+        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      displayName: 'Install Azure CLI'
 
     # Get the ACR login server and log in
     - task: AzureCLI@2
