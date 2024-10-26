@@ -77,12 +77,29 @@ pwc-flask-app   azure-application-gateway   *       135.237.76.147   80      22m
 
 Here the application will be accessible at: http://135.237.76.147/products
 
-# Automated Application deployment using Azure DevOps
-To create the flow of CI/CD and Continuous deployment we will utilize Azure DevOps to create CI/CD pipeline and deploy the helm chart to the AKS
-
 ### Requiered customization for azure subscription
 * Increase the vCPUs quota if you are using Pay As You Go plan
 * Register for ```EncryptionAtHost```
     ```bash
     az feature register --name EncryptionAtHost  --namespace Microsoft.Compute
     ```
+
+# Application deployment using Jenkins
+Onf of the fast options to get the pipeline ready is Jenkins. Below steps are done to creatre the Jenkins controler:
+* Create Azure VM
+* Install Jenkins using .dep packages to simplify the pipeline execution (it will be easy with native ubuntu 24.04 image that a container image)
+    ```bash
+        sudo apt update -y && sudo apt upgrade -y
+        sudo apt install openjdk-21-jdk -y
+        sudo wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+        echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+/etc/apt/sources.list.d/jenkins.list > /dev/null
+        sudo apt update -y
+        sudo apt install jenkins -y
+        sudo systemctl start jenkins && sudo systemctl enable jenkins
+        
+    ```
+
+# Automated Application deployment using Azure DevOps
+To create the flow of CI/CD and Continuous deployment we will utilize Azure DevOps to create CI/CD pipeline and deploy the helm chart to the AKS
+
