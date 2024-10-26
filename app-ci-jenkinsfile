@@ -1,8 +1,34 @@
 pipeline {
     agent any
 
+    environment {
+        ACR_NAME = 'aksflaskdemo'                              // ACR name
+        ACR_RESOURCE_GROUP = 'aks-demo'                        // Resource group for ACR
+        DOCKER_IMAGE_NAME = 'sampleflask'                      // Docker image name
+        DOCKERFILE_PATH = 'Dockerfile'                         // Path to Dockerfile
+        IMAGE_TAG = "${env.BUILD_ID}"                          // Tag the image with the Jenkins build ID
+    }
 
     stages {
+        stage('Retrieve Azure Secrets') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'e29f2ed9-34b3-4283-b37a-3257e1f5aa72', variable: 'AZURE_CLIENT_ID'),
+                        string(credentialsId: '88d71be1-48d6-4a25-b691-09cc3544495f', variable: 'AZURE_CLIENT_SECRET'),
+                        string(credentialsId: '6089b26a-02d4-477f-9fad-231ac4bd130e', variable: 'AZURE_TENANT_ID'),
+                        string(credentialsId: 'dd4f58bd-a1df-4fd4-a8fb-f33f15efba78', variable: 'AZURE_SUBSCRIPTION_ID')
+                    ]) {
+                        // Make these variables accessible globally within the pipeline
+                        env.AZURE_CLIENT_ID = "${AZURE_CLIENT_ID}"
+                        env.AZURE_CLIENT_SECRET = "${AZURE_CLIENT_SECRET}"
+                        env.AZURE_TENANT_ID = "${AZURE_TENANT_ID}"
+                        env.AZURE_SUBSCRIPTION_ID = "${AZURE_SUBSCRIPTION_ID}"
+                    }
+                }
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 git url: 'https://github.com/mohamedmshokry/sample-Flask-AKS.git', branch: 'main'
@@ -12,10 +38,8 @@ pipeline {
         stage('Install Azure CLI') {
             steps {
                 script {
-                    // Check if Azure CLI is installed
                     def azureInstalled = sh(script: 'az --version', returnStatus: true)
                     if (azureInstalled != 0) {
-                        // Install Azure CLI if not installed
                         sh 'curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash'
                     } else {
                         echo 'Azure CLI is already installed.'
@@ -27,10 +51,8 @@ pipeline {
         stage('Install Docker') {
             steps {
                 script {
-                    // Check if Docker is installed
                     def dockerInstalled = sh(script: 'docker --version', returnStatus: true)
                     if (dockerInstalled != 0) {
-                        // Install Docker if not installed
                         sh '''
                         sudo apt-get update
                         sudo apt-get install -y docker.io
@@ -45,7 +67,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Login to Azure') {
             steps {
                 sh '''
@@ -58,13 +80,8 @@ pipeline {
         stage('Login to ACR') {
             steps {
                 script {
-                    // Retrieve the ACR login server URL
                     def acrLoginServer = sh(script: "az acr show --resource-group ${ACR_RESOURCE_GROUP} --name ${ACR_NAME} --query 'loginServer' --output tsv", returnStdout: true).trim()
-
-                    // Log in to ACR
                     sh "az acr login --name ${ACR_NAME}"
-
-                    // Set the full image tag with the ACR login server
                     env.FULL_IMAGE_TAG = "${acrLoginServer}/${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
@@ -75,41 +92,6 @@ pipeline {
                 script {
                     sh "docker build -t ${env.FULL_IMAGE_TAG} -f ${DOCKERFILE_PATH} ."
                     sh "docker push ${env.FULL_IMAGE_TAG}"
-                }
-            }
-        }
-
-        stage('Provision AKS with Terraform') {
-            steps {
-                script {
-                    // Write the secret content to terraform.tfvars
-                    withCredentials([file(credentialsId: 'a60aaf57-09e1-4bfd-a9a9-875fb508262a', variable: 'TFVARS_FILE')]) {
-                        // Create a Terraform variable file
-                        sh "cp ${TFVARS_FILE} terraform-aks-provisioning/terraform.tfvars"
-                    }
-
-                    // Check if Terraform is installed
-                    def terraformInstalled = sh(script: 'terraform version', returnStatus: true)
-                    if (terraformInstalled != 0) {
-                        // Install Terraform if not installed
-                        sh '''
-                        sudo apt-get update
-                        sudo apt-get install -y wget unzip
-                        wget https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip
-                        unzip terraform_1.9.8_linux_amd64.zip
-                        sudo mv terraform /usr/local/bin/
-                        '''
-                    } else {
-                        echo 'Terraform is already installed.'
-                    }
-
-                    // Initialize and apply Terraform configuration
-                    sh '''
-                    cd terraform-aks-provisioning                               # Navigate to the directory with your Terraform files
-                    terraform init                                              # Initialize Terraform
-                    terraform plan -var-file=terraform.tfvars                   # Review the planned changes
-                    terraform apply -var-file=terraform.tfvars -auto-approve    # Apply the changes
-                    '''
                 }
             }
         }
