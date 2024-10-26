@@ -34,6 +34,7 @@ stages:
         sudo systemctl start docker
         sudo systemctl enable docker
         sudo usermod -aG docker $(whoami)
+        newgrp docker
       displayName: 'Install Docker'
 
     # Get the ACR login server and log in
