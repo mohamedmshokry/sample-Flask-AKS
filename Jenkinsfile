@@ -1,18 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        AZURE_CLIENT_ID = ""
-        AZURE_CLIENT_SECRET = ""
-        AZURE_TENANT_ID = ""
-        AZURE_SUBSCRIPTION_ID = ""
-        ACR_NAME = 'aksflaskdemo'                              // ACR name
-        ACR_RESOURCE_GROUP = 'aks-demo'                        // Resource group for ACR
-        DOCKER_IMAGE_NAME = 'sampleflask'                      // Docker image name
-        DOCKERFILE_PATH = 'Dockerfile'                         // Path to Dockerfile
-        IMAGE_TAG = "${env.BUILD_ID}"                          // Tag the image with the Jenkins build ID
-    }
-
     stages {
         stage('Checkout Code') {
             steps {
