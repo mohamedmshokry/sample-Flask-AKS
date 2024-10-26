@@ -7,10 +7,10 @@ resource "random_id" "name" {
 }
 
 # Getting existing AKS admins group
-data "azuread_group" "msentra-aks-group" {
-  display_name     = var.msentra-aks-admins
-  security_enabled = true
-}
+# data "azuread_group" "msentra-aks-group" {
+#   display_name     = var.msentra-aks-admins
+#   security_enabled = true
+# }
 
 resource "azurerm_resource_group" "main" {
   count = var.create_resource_group ? 1 : 0
@@ -196,10 +196,10 @@ module "aks" {
   rbac_aad                                        = true
   rbac_aad_managed                                = true
   role_based_access_control_enabled               = true
-  # rbac_aad_admin_group_object_ids               = var.rbac_aad_admin_group_object_ids
-  rbac_aad_admin_group_object_ids = [data.azuread_group.msentra-aks-group.object_id]
-  sku_tier                        = "Standard"
-  vnet_subnet_id                  = var.bring_your_own_vnet ? azurerm_subnet.aks-subnet[0].id : null
+  rbac_aad_admin_group_object_ids                 = var.rbac_aad_admin_group_object_ids
+  # rbac_aad_admin_group_object_ids = [data.azuread_group.msentra-aks-group.object_id]
+  sku_tier       = "Standard"
+  vnet_subnet_id = var.bring_your_own_vnet ? azurerm_subnet.aks-subnet[0].id : null
   depends_on = [
     azurerm_subnet.aks-subnet,
   ]
