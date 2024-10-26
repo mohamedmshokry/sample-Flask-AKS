@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        AZURE_CLIENT_ID = "eb342a6b-c9a4-427c-9091-87906c6fb432"
-        AZURE_CLIENT_SECRET = "1M08Q~20GMJ38CePsTlfu0aC44pJcOdEb-vhZba~"
-        AZURE_TENANT_ID = "8e3ba3a6-8904-4766-96df-6f73186bf69f"
-        AZURE_SUBSCRIPTION_ID = "ff3487eb-e5ec-44cb-8d02-b4b59abb7f9e"
+        AZURE_CLIENT_ID = ""
+        AZURE_CLIENT_SECRET = ""
+        AZURE_TENANT_ID = ""
+        AZURE_SUBSCRIPTION_ID = ""
         ACR_NAME = 'aksflaskdemo'                              // ACR name
         ACR_RESOURCE_GROUP = 'aks-demo'                        // Resource group for ACR
         DOCKER_IMAGE_NAME = 'sampleflask'                      // Docker image name
