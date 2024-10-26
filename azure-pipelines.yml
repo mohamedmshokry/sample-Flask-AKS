@@ -7,7 +7,6 @@ pool:
   name: 'local-hosted'
 
 variables:
-  azureSubscription: 'Your-Azure-Service-Connection'    # Azure service connection name
   acrName: 'aksflaskdemo'                               # ACR name
   acrResourceGroup: 'aks-demo'                          # Resource group for ACR
   dockerImageName: 'sampleflask'                        # Docker image name
@@ -27,6 +26,15 @@ stages:
     - script: |
         curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
       displayName: 'Install Azure CLI'
+
+    # Install Docker
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        sudo systemctl start docker
+        sudo systemctl enable docker
+        sudo usermod -aG docker $(whoami)
+      displayName: 'Install Docker'
 
     # Get the ACR login server and log in
     - task: AzureCLI@2
