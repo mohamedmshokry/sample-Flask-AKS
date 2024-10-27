@@ -22,20 +22,32 @@ stages:
     - checkout: self
       persistCredentials: true
 
-    # Install Azure CLI
+    # Check if Azure CLI is installed; if not, install it
     - script: |
-        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-      displayName: 'Install Azure CLI'
+        if ! command -v az &> /dev/null
+        then
+            echo "Azure CLI not found. Installing Azure CLI..."
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+        else
+            echo "Azure CLI is already installed. Skipping installation."
+        fi
+      displayName: 'Check and Install Azure CLI if Needed'
 
-    # Install Docker
+    # Check if Docker is installed; if not, install it
     - script: |
-        sudo apt-get update
-        sudo apt-get install -y docker.io
-        sudo systemctl start docker
-        sudo systemctl enable docker
-        sudo usermod -aG docker $(whoami)
-        newgrp docker
-      displayName: 'Install Docker'
+        if ! command -v docker &> /dev/null
+        then
+            echo "Docker not found. Installing Docker..."
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker $(whoami)
+            newgrp docker
+        else
+            echo "Docker is already installed. Skipping installation."
+        fi
+      displayName: 'Check and Install Docker if Needed'
 
     # Get the ACR login server and log in
     - task: AzureCLI@2
