@@ -54,7 +54,7 @@ pipeline {
                             // Use the secret file as terraform.tfvars
                             sh 'terraform init'
                             // sh 'terraform plan -destroy -var-file=$TFVARS_FILE -out=destroy.tfplan'
-                            sh 'terraform destroy -auto-approve'
+                            sh 'terraform apply -destroy -var-file=$TFVARS_FILE -auto-approve'
                         }
                     }
                 }
