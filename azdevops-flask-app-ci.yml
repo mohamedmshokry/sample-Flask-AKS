@@ -1,0 +1,67 @@
+trigger:
+  branches:
+    include:
+      - main  # Trigger on changes to the main branch
+
+pool:
+  name: 'local-hosted'
+
+variables:
+  acrName: 'aksflaskdemo'                               # ACR name
+  acrResourceGroup: 'aks-demo'                          # Resource group for ACR
+  dockerImageName: 'sampleflask'                        # Docker image name
+  dockerFilePath: 'Dockerfile'                          # Path to Dockerfile in the repo
+  imageTag: $(Build.BuildId)                            # Tag the image with the build ID
+
+stages:
+- stage: BuildAndPush
+  jobs:
+  - job: BuildAndPushDockerImage
+    displayName: 'Build and Push Docker Image to ACR'
+    steps:
+    - checkout: self
+      persistCredentials: true
+
+    # Check if Azure CLI is installed; if not, install it
+    - script: |
+        if ! command -v az &> /dev/null
+        then
+            echo "Azure CLI not found. Installing Azure CLI..."
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+        else
+            echo "Azure CLI is already installed. Skipping installation."
+        fi
+      displayName: 'Check and Install Azure CLI if Needed'
+
+    # Check if Docker is installed; if not, install it
+    - script: |
+        if ! command -v docker &> /dev/null
+        then
+            echo "Docker not found. Installing Docker..."
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker $(whoami)
+            newgrp docker
+        else
+            echo "Docker is already installed. Skipping installation."
+        fi
+      displayName: 'Check and Install Docker if Needed'
+
+    # Get the ACR login server and log in
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'Azure subscription (PAYG)(ff3487eb-e5ec-44cb-8d02-b4b59abb7f9e)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # Get the ACR login server URL
+          ACR_LOGIN_SERVER=$(az acr show --resource-group $(acrResourceGroup) --name $(acrName) --query "loginServer" --output tsv)
+          
+          # Log in to ACR
+          az acr login --name $(acrName)
+          
+          # Build and push the Docker image
+          docker build -t $ACR_LOGIN_SERVER/$(dockerImageName):$(imageTag) -f $(dockerFilePath) .
+          docker push $ACR_LOGIN_SERVER/$(dockerImageName):$(imageTag)
