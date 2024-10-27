@@ -59,19 +59,6 @@ pipeline {
                     }
                 }
             }
-
-        stage('Attach ACR to AKS Cluster') {
-            steps {
-                dir('terraform-aks-provisioning') { 
-                    script {
-                        sh"""
-                        az aks update --name aks-flask-demo --resource-group aks-pwc-demo --attach-acr aksflaskdemo
-                        """
-                        }
-                    }
-                }
-            }
-
         }
     }
 

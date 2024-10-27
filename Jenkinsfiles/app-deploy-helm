@@ -2,10 +2,12 @@ pipeline {
     agent any
 
     parameters {
-        booleanParam(name: 'SKIP_GET_TERRAFORM_OUTPUT', defaultValue: false, description: 'Skip the Get Terraform Output stage')
+        string(name: 'AKS_RG_NAME', defaultValue: 'aks-pwc-demo', description: 'Azure Resource Group Name where the AKS cluster is deployed')
+        string(name: 'AKS_CLUSTER_NAME', defaultValue: 'aks-flask-demo', description: 'Azure AKS cluster name')
+        string(name: 'ACR_NAME', defaultValue: 'aksflaskdemo', description: 'Azure Container Registry name')
+        string(name: 'IMAGE_TAG', defaultValue: '0.1', description: 'Flask app image tag')
         string(name: 'RELEASE_NAME', defaultValue: 'flask-app', description: 'Helm release name')
         string(name: 'K8S_NAMESPACE', defaultValue: 'default', description: 'Kubernetes Namespace to deploy the Helm chart')
-        string(name: 'AKS_CONNECT_COMMAND', defaultValue: '', description: 'It should be something like az aks get-credentials --resource-group <resource group> --name <cluster name> --admin --overwrite-existing')
     }
 
     stages {
@@ -35,23 +37,6 @@ pipeline {
         }
 
 
-        stage('Get Terraform Output') {
-            when {
-                expression { !params.SKIP_GET_TERRAFORM_OUTPUT }
-            }
-            steps {
-                dir('terraform-aks-provisioning') {
-                    script {
-                        env.AKS_CONNECT_COMMAND = sh(script: 'terraform output -raw aks-connect-command', returnStdout: true).trim()
-                        // Save the output command to a file
-                        writeFile(file: 'aks_connect_command.txt', text: "${env.AKS_CONNECT_COMMAND}")
-                        // Archive the file for later use
-                        archiveArtifacts artifacts: 'aks_connect_command.txt', allowEmptyArchive: true
-                    }
-                }
-            }
-        }
-
         stage('Login to Azure') {
             steps {
                 sh '''
@@ -64,14 +49,9 @@ pipeline {
         stage('Login to AKS') {
             steps {
                 script {
-                    // Use the connect command provided by the user or from the output
-                    if (params.AKS_CONNECT_COMMAND) {
-                        echo "Using provided AKS connect command."
-                        sh "${params.AKS_CONNECT_COMMAND}"
-                    } else {
-                        echo "Using Terraform output AKS connect command."
-                        sh "${env.AKS_CONNECT_COMMAND}"
-                    }
+                    sh """
+                    az aks get-credentials --resource-group '${params.AKS_RG_NAME}' --name '${params.AKS_CLUSTER_NAME}' --admin --overwrite-existing
+                    """
                 }
             }
         }
@@ -110,11 +90,23 @@ pipeline {
             }
         }
 
+        stage('Attach ACR to AKS Cluster') {
+            steps {
+                dir('terraform-aks-provisioning') { 
+                    script {
+                        sh"""
+                        az aks update --name '${params.AKS_CLUSTER_NAME}' --resource-group '${params.AKS_RG_NAME}' --attach-acr '${params.ACR_NAME}'
+                        """
+                        }
+                    }
+                }
+            }
+
         stage('Deploy Helm Chart') {
             steps {
                 script {
                     sh """
-                        helm upgrade --atomic --install '${params.RELEASE_NAME}' ./flask-app-chart --namespace ${params.K8S_NAMESPACE} --create-namespace
+                        helm upgrade --atomic --install '${params.RELEASE_NAME}' --set image.tag='${params.IMAGE_TAG}' ./flask-app-chart --namespace ${params.K8S_NAMESPACE} --create-namespace
                     """
                 }
             }
