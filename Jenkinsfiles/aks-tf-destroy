@@ -53,8 +53,8 @@ pipeline {
                         withCredentials([file(credentialsId: 'a60aaf57-09e1-4bfd-a9a9-875fb508262a', variable: 'TFVARS_FILE')]) {
                             // Use the secret file as terraform.tfvars
                             sh 'terraform init'
-                            sh 'terraform plan -destroy -var-file=$TFVARS_FILE -out=destroy.tfplan'
-                            sh 'terraform apply -auto-approve destroy.tfplan'
+                            // sh 'terraform plan -destroy -var-file=$TFVARS_FILE -out=destroy.tfplan'
+                            sh 'terraform destroy -auto-approve'
                         }
                     }
                 }
