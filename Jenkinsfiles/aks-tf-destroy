@@ -1,0 +1,73 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Retrieve Azure Secrets') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'e29f2ed9-34b3-4283-b37a-3257e1f5aa72', variable: 'AZURE_CLIENT_ID'),
+                        string(credentialsId: '88d71be1-48d6-4a25-b691-09cc3544495f', variable: 'AZURE_CLIENT_SECRET'),
+                        string(credentialsId: '6089b26a-02d4-477f-9fad-231ac4bd130e', variable: 'AZURE_TENANT_ID'),
+                        string(credentialsId: 'dd4f58bd-a1df-4fd4-a8fb-f33f15efba78', variable: 'AZURE_SUBSCRIPTION_ID')
+                    ]) {
+                        env.ARM_CLIENT_ID = "${AZURE_CLIENT_ID}"
+                        env.ARM_CLIENT_SECRET = "${AZURE_CLIENT_SECRET}"
+                        env.ARM_TENANT_ID = "${AZURE_TENANT_ID}"
+                        env.ARM_SUBSCRIPTION_ID = "${AZURE_SUBSCRIPTION_ID}"
+                    }
+                }
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                git url: 'https://github.com/mohamedmshokry/sample-Flask-AKS.git', branch: 'main'
+            }
+        }
+
+        stage('Install Terraform') {
+            steps {
+                script {
+                    def terraformInstalled = sh(script: 'terraform --version', returnStatus: true)
+                    if (terraformInstalled != 0) {
+                        sh '''
+                        sudo apt-get update
+                        sudo apt-get install -y wget unzip
+                        wget https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip
+                        unzip terraform_1.9.8_linux_amd64.zip
+                        sudo mv terraform /usr/local/bin/
+                        '''
+                    } else {
+                        echo 'Terraform is already installed.'
+                    }
+                }
+            }
+        }
+
+        stage('Initialize and Destroy Infrastructure') {
+            steps {
+                dir('terraform-aks-provisioning') { // Navigate to your Terraform AKS directory
+                    script {
+                        withCredentials([file(credentialsId: 'a60aaf57-09e1-4bfd-a9a9-875fb508262a', variable: 'TFVARS_FILE')]) {
+                            // Use the secret file as terraform.tfvars
+                            sh 'terraform init'
+                            sh 'terraform plan -destroy -var-file=$TFVARS_FILE -out=destroy.tfplan'
+                            sh 'terraform apply -auto-approve destroy.tfplan'
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'AKS cluster destroyed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check error logs.'
+        }
+    }
+}
