@@ -1,0 +1,132 @@
+pipeline {
+    agent any
+
+    parameters {
+        booleanParam(name: 'SKIP_GET_TERRAFORM_OUTPUT', defaultValue: false, description: 'Skip the Get Terraform Output stage')
+        string(name: 'RELEASE_NAME', defaultValue: 'flask-app', description: 'Helm release name')
+        string(name: 'K8S_NAMESPACE', defaultValue: 'default', description: 'Kubernetes Namespace to deploy the Helm chart')
+        string(name: 'AKS_CONNECT_COMMAND', defaultValue: '', description: 'It should be something like az aks get-credentials --resource-group <resource group> --name <cluster name> --admin --overwrite-existing')
+    }
+
+    stages {
+
+        stage('Retrieve Azure Secrets') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'e29f2ed9-34b3-4283-b37a-3257e1f5aa72', variable: 'AZURE_CLIENT_ID'),
+                        string(credentialsId: '88d71be1-48d6-4a25-b691-09cc3544495f', variable: 'AZURE_CLIENT_SECRET'),
+                        string(credentialsId: '6089b26a-02d4-477f-9fad-231ac4bd130e', variable: 'AZURE_TENANT_ID'),
+                        string(credentialsId: 'dd4f58bd-a1df-4fd4-a8fb-f33f15efba78', variable: 'AZURE_SUBSCRIPTION_ID')
+                    ]) {
+                        env.ARM_CLIENT_ID = "${AZURE_CLIENT_ID}"
+                        env.ARM_CLIENT_SECRET = "${AZURE_CLIENT_SECRET}"
+                        env.ARM_TENANT_ID = "${AZURE_TENANT_ID}"
+                        env.ARM_SUBSCRIPTION_ID = "${AZURE_SUBSCRIPTION_ID}"
+                    }
+                }
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                git url: 'https://github.com/mohamedmshokry/sample-Flask-AKS.git', branch: 'main'
+            }
+        }
+
+
+        stage('Get Terraform Output') {
+            when {
+                expression { !params.SKIP_GET_TERRAFORM_OUTPUT }
+            }
+            steps {
+                dir('terraform-aks-provisioning') {
+                    script {
+                        env.AKS_CONNECT_COMMAND = sh(script: 'terraform output -raw aks-connect-command', returnStdout: true).trim()
+                        // Save the output command to a file
+                        writeFile(file: 'aks_connect_command.txt', text: "${env.AKS_CONNECT_COMMAND}")
+                        // Archive the file for later use
+                        archiveArtifacts artifacts: 'aks_connect_command.txt', allowEmptyArchive: true
+                    }
+                }
+            }
+        }
+
+        stage('Login to Azure') {
+            steps {
+                sh '''
+                az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+                az account set --subscription $ARM_SUBSCRIPTION_ID
+                '''
+            }
+        }
+
+        stage('Login to AKS') {
+            steps {
+                script {
+                    // Use the connect command provided by the user or from the output
+                    if (params.AKS_CONNECT_COMMAND) {
+                        echo "Using provided AKS connect command."
+                        sh "${params.AKS_CONNECT_COMMAND}"
+                    } else {
+                        echo "Using Terraform output AKS connect command."
+                        sh "${env.AKS_CONNECT_COMMAND}"
+                    }
+                }
+            }
+        }
+
+        stage('Install Helm') {
+            steps {
+                script {
+                    def helmInstalled = sh(script: 'helm version', returnStatus: true)
+                    if (helmInstalled != 0) {
+                        sh 'curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash'
+                    } else {
+                        echo 'Helm is already installed.'
+                    }
+                }
+            }
+        }
+
+        stage('Install kubelogin') {
+            steps {
+                script {
+                    // Check if kubelogin is already installed
+                    def kubeloginInstalled = sh(script: 'kubelogin --version', returnStatus: true)
+
+                    if (kubeloginInstalled != 0) {
+                        echo 'kubelogin is not installed. Installing now...'
+                        sh '''
+                        curl -LO "https://github.com/Azure/kubelogin/releases/latest/download/kubelogin-linux-amd64.zip"
+                        unzip -o kubelogin-linux-amd64.zip  # Use -o to overwrite without prompting
+                        sudo mv bin/linux_amd64/kubelogin /usr/local/bin/
+                        sudo chmod +x /usr/local/bin/kubelogin
+                        '''
+                    } else {
+                        echo 'kubelogin is already installed.'
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Helm Chart') {
+            steps {
+                script {
+                    sh """
+                        helm upgrade --atomic --install '${params.RELEASE_NAME}' ./flask-app-chart --namespace ${params.K8S_NAMESPACE} --create-namespace
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Helm application deployed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check error logs.'
+        }
+    }
+}
