@@ -19,27 +19,29 @@ stages:
     - checkout: self
       persistCredentials: true
 
-    - task: UseDotNet@2
-      inputs:
-        packageType: 'sdk'
-        version: '6.x'
-    
+    # Install Terraform if not available
     - script: |
+        sudo apt-get update
+        sudo apt-get install -y wget unzip
+        wget https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip
+        unzip terraform_1.9.8_linux_amd64.zip
+        sudo mv terraform /usr/local/bin/
+      displayName: 'Install Terraform'
+
+    # Download terraform.tfvars as a secure file if it's stored as a secret
+    - task: DownloadSecureFile@1
+      inputs:
+        secureFile: 'terraform.tfvars'
+
+    - script: |
+        # Move terraform.tfvars into the terraform-aks-provisioning directory
+        cp "$(System.DefaultWorkingDirectory)/_temp/terraform.tfvars" "$(terraformDirectory)/terraform.tfvars"
+        
         # Set environment variables for ARM_* using Azure DevOps secrets
         export ARM_CLIENT_ID=$(ARM_CLIENT_ID)
         export ARM_CLIENT_SECRET=$(ARM_CLIENT_SECRET)
         export ARM_SUBSCRIPTION_ID=$(ARM_SUBSCRIPTION_ID)
         export ARM_TENANT_ID=$(ARM_TENANT_ID)
-      displayName: 'Set ARM Environment Variables'
-      env:
-        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-        ARM_TENANT_ID: $(ARM_TENANT_ID)
-
-    - script: |
-        # Copy terraform.tfvars into the terraform-aks-provisioning directory
-        cp "$(System.DefaultWorkingDirectory)/_temp/terraform.tfvars" "$(terraformDirectory)/terraform.tfvars"
         
         # Execute Terraform commands
         terraform -chdir=$(terraformDirectory) init
