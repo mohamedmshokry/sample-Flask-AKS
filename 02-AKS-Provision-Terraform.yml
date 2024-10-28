@@ -1,0 +1,63 @@
+name: 02-AKS-Provision-Terraform
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  tfDir: 'terraform-aks-provisioning' # Path to Terraform directory
+
+stages:
+- stage: ProvisionAKS
+  jobs:
+  - job: TerraformProvision
+    displayName: 'Provision AKS Cluster with Terraform'
+    steps:
+    
+    # Step 1: Checkout the Code
+    - checkout: self
+      persistCredentials: true
+
+    # Step 2: Check and Install Terraform
+    - script: |
+        if ! command -v terraform &> /dev/null; then
+            echo "Terraform not found, installing..."
+            sudo apt-get update
+            sudo apt-get install -y wget unzip
+            wget https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip
+            unzip terraform_1.9.8_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/
+        else
+            echo "Terraform is already installed."
+        fi
+      displayName: 'Check and Install Terraform if Needed'
+
+    # Step 3: Set Up Azure Authentication (Assumes Service Connection)
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'Azure subscription (PAYG)(ff3487eb-e5ec-44cb-8d02-b4b59abb7f9e)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: 'echo "Authenticated to Azure successfully"'
+
+    # Step 4: Initialize and Apply Terraform with terraform.tfvars
+    - task: DownloadSecureFile@1
+      name: tfvarsFile
+      inputs:
+        secureFile: 'terraform.tfvars' # Secure file in Azure DevOps Library
+
+    - script: |
+        # Navigate to the Terraform directory
+        cd $(tfDir)
+        
+        # Move terraform.tfvars into the directory as the tfvars file
+        cp $(Agent.TempDirectory)/$(tfvarsFile.secureFilePath) terraform.tfvars
+        
+        # Initialize, Plan, and Apply Terraform Configuration
+        terraform init
+        terraform plan -var-file="terraform.tfvars" -out=tfplan
+        terraform apply -auto-approve tfplan
+      displayName: 'Initialize and Apply Terraform'
