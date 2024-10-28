@@ -1,3 +1,6 @@
+name: 01-Flask-App-CI
+appendCommitMessageToRunName: false
+
 trigger:
   branches:
     include:
