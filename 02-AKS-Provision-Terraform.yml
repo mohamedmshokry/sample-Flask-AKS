@@ -38,8 +38,10 @@ stages:
         ARM_TENANT_ID: $(ARM_TENANT_ID)
 
     - script: |
-        mkdir -p $(terraformDirectory)
+        # Copy terraform.tfvars into the terraform-aks-provisioning directory
         cp "$(System.DefaultWorkingDirectory)/_temp/terraform.tfvars" "$(terraformDirectory)/terraform.tfvars"
+        
+        # Execute Terraform commands
         terraform -chdir=$(terraformDirectory) init
         terraform -chdir=$(terraformDirectory) plan -var-file=terraform.tfvars -out=terraform.tfplan
         terraform -chdir=$(terraformDirectory) apply -auto-approve terraform.tfplan
