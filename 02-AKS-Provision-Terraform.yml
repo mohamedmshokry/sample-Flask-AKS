@@ -5,59 +5,47 @@ trigger:
       - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'local-hosted'
 
 variables:
-  tfDir: 'terraform-aks-provisioning' # Path to Terraform directory
+  terraformDirectory: 'terraform-aks-provisioning'
 
 stages:
 - stage: ProvisionAKS
   jobs:
-  - job: TerraformProvision
-    displayName: 'Provision AKS Cluster with Terraform'
+  - job: AKSProvisioning
+    displayName: 'Provision AKS Cluster using Terraform'
     steps:
-    
-    # Step 1: Checkout the Code
     - checkout: self
       persistCredentials: true
 
-    # Step 2: Check and Install Terraform
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '6.x'
+    
     - script: |
-        if ! command -v terraform &> /dev/null; then
-            echo "Terraform not found, installing..."
-            sudo apt-get update
-            sudo apt-get install -y wget unzip
-            wget https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip
-            unzip terraform_1.9.8_linux_amd64.zip
-            sudo mv terraform /usr/local/bin/
-        else
-            echo "Terraform is already installed."
-        fi
-      displayName: 'Check and Install Terraform if Needed'
-
-    # Step 3: Set Up Azure Authentication (Assumes Service Connection)
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: 'Azure subscription (PAYG)(ff3487eb-e5ec-44cb-8d02-b4b59abb7f9e)'
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: 'echo "Authenticated to Azure successfully"'
-
-    # Step 4: Initialize and Apply Terraform with terraform.tfvars
-    - task: DownloadSecureFile@1
-      name: tfvarsFile
-      inputs:
-        secureFile: 'terraform.tfvars' # Secure file in Azure DevOps Library
+        # Set environment variables for ARM_* using Azure DevOps secrets
+        export ARM_CLIENT_ID=$(ARM_CLIENT_ID)
+        export ARM_CLIENT_SECRET=$(ARM_CLIENT_SECRET)
+        export ARM_SUBSCRIPTION_ID=$(ARM_SUBSCRIPTION_ID)
+        export ARM_TENANT_ID=$(ARM_TENANT_ID)
+      displayName: 'Set ARM Environment Variables'
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
 
     - script: |
-        # Navigate to the Terraform directory
-        cd $(tfDir)
-        
-        # Move terraform.tfvars into the directory as the tfvars file
-        cp $(Agent.TempDirectory)/$(tfvarsFile.secureFilePath) terraform.tfvars
-        
-        # Initialize, Plan, and Apply Terraform Configuration
-        terraform init
-        terraform plan -var-file="terraform.tfvars" -out=tfplan
-        terraform apply -auto-approve tfplan
-      displayName: 'Initialize and Apply Terraform'
+        mkdir -p $(terraformDirectory)
+        cp "$(System.DefaultWorkingDirectory)/_temp/terraform.tfvars" "$(terraformDirectory)/terraform.tfvars"
+        terraform -chdir=$(terraformDirectory) init
+        terraform -chdir=$(terraformDirectory) plan -var-file=terraform.tfvars -out=terraform.tfplan
+        terraform -chdir=$(terraformDirectory) apply -auto-approve terraform.tfplan
+      displayName: 'Initialize, Plan, and Apply Terraform'
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
