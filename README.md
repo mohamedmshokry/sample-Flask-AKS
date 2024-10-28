@@ -125,7 +125,7 @@ Two main flavors supported for the deployment:
 
 directory ```terraform-aks-provisioning``` in the repo contains needed terraform modules and files need to create the AKS, vnet, Application Gateway
 
-***NOTE: terraform is created with azurerm backend portability of state file and lock mamnagement, This is very useful for the pipelines automation*** 
+***NOTE: terraform is created with azurerm backend portability of state file and lock management, This is very useful for the pipelines automation*** 
 
 To provision the AKS along with resource group, vnet, subnet, App Gateway (This steps takes 20+ minutes)
 
@@ -133,6 +133,22 @@ Create a service principal to be used by terraform for Azure authentication:
 ```bash
 az ad sp create-for-rbac --name "<SP Name>" --role Contributor --scopes /subscriptions/<Azure Subscription ID>
 ```
+
+To make use of azurerm terraform backend configuered in providers.tf there should be Azure storage account and container for saving Terraform state file:
+```bash
+# Create a standard general-purpose v2 storage account with Local Redundant Storage (LRS)
+❯ az storage account create \                                       
+    --name tfbackendccount \
+    --resource-group aks-demo \
+    --location "East US" \
+    --sku Standard_LRS
+
+# Create Blob Container to host the terraform.tfstate file
+❯ az storage container create \
+    --name tfstate \
+    --account-name tfbackendccount
+```
+
 populate your service principal client_id, client_secret, tenant_id with your favourite way for example using hidden .env file
 ```bash
 cat <<EOF > .env
@@ -234,7 +250,7 @@ One of the fast options to get the pipeline ready is Jenkins. Below steps are do
     ```
 The directory Jenkinsfiles contains the jenkins files used to automate each stage
 we have now four pipelines
-* **01-Flask-App-CI** : Get latest flask app Dockerfile from the repo, build the image and push it to ACR
+* **01-Flask-App-CI** : Automatically triggered on push events to the repo (using GitHub hook trigger for GITScm polling) to get latest flask app Dockerfile from the repo, build the image and push it to ACR
 * **02-AKS-Provision-Terraform** : Get latest Terraform files from the repo, initialize, plan and create the AKS
 * **03-Deploy-Flask-App-Helm** : parametrized pipeline that get the latest helm chart from the repo and deploy it to AKS 
 * **04-AKS-Destroy-Terraform** : Destroy AKS
@@ -247,5 +263,10 @@ we have now four pipelines
 * Helm is using values files for customization. Helm Pipeline is exposing only commonly changed values like Helm release name, namespace, and image tag
 ***
 # Automated Application deployment using Azure DevOps (Work In Progress)
-To create the flow of CI/CD and Continuous deployment we will utilize Azure DevOps to create CI/CD pipeline and deploy the helm chart to the AKS
+Another oprtion to create the flow of CI/CD and Continuous deployment we will utilize Azure DevOps to create CI/CD pipeline and deploy the helm chart to the AKS
 
+In order get up and running fast we can use VSTS local agents, So I will be using local Ubuntu 22.04 VM to host the pipeline executions 
+
+We have below Azure pipeline files:
+* **azdevops-flask-app-ci.yml** Azure pipeline automatically triggered on repo changes to build flask app docker image and push it ACR
+* **02-AKS-Provision-Terraform.yml** Pipeline to provision AKS
