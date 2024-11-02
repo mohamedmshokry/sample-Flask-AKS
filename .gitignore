@@ -213,3 +213,4 @@ terraform.rc
 ## VScode workspaces
 ##
 *.code-workspace
+.manual_commands.sh
